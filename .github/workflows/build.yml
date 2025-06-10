@@ -66,6 +66,10 @@ jobs:
           username: ${{ secrets.ALIYUN_ACR_USERNAME }}
           password: ${{ secrets.ALIYUN_ACR_PASSWORD }}
 
+      - name: Fetch Current version
+        id: get-current-tag
+        uses: actions-ecosystem/action-get-latest-tag@v1.6.0
+
       - name: Push to Alibaba Cloud Container Registry - Standard Version
         uses: docker/build-push-action@v3
         if: github.event_name == 'push'
