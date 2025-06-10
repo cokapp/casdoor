@@ -157,8 +157,8 @@ class PaymentResultPage extends React.Component {
       // append some usefull callback parameter to SuccessUrl      
       const returnUrl = new URL(payment.returnUrl);
       const params = new URLSearchParams(returnUrl.search);
-      params.set('owner', payment.owner);
-      params.set('paymentName', payment.name);
+      params.set("owner", payment.owner);
+      params.set("paymentName", payment.name);
       returnUrl.search = params.toString();
 
       Setting.goToLink(returnUrl.toString());
