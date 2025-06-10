@@ -23,6 +23,8 @@ import (
 
 	"github.com/casdoor/casdoor/util"
 	"github.com/xorm-io/core"
+
+	"net/url"
 )
 
 type Product struct {
@@ -197,7 +199,16 @@ func BuyProduct(id string, user *User, providerName, pricingName, planName, host
 
 	returnUrl := fmt.Sprintf("%s/payments/%s/%s/result?source=pay", originFrontend, owner, paymentName)
 	if product.ReturnType == "directRedirect" {
+		// give some usefull callback parameter to SuccessUrl
 		returnUrl = product.ReturnUrl
+		parsedURL, err := url.Parse(returnUrl)
+		if err == nil {
+			params := parsedURL.Query()
+			params.Set("owner", owner)
+			params.Set("paymentName", paymentName)
+			parsedURL.RawQuery = params.Encode()
+			returnUrl = parsedURL.String()
+		}
 	}
 
 	notifyUrl := fmt.Sprintf("%s/api/notify-payment/%s/%s", originBackend, owner, paymentName)
