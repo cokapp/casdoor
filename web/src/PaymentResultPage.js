@@ -158,7 +158,7 @@ class PaymentResultPage extends React.Component {
       const returnUrl = new URL(payment.returnUrl);
       const params = new URLSearchParams(returnUrl.search);
       params.set('owner', payment.owner);
-      params.set('paymentName', payment.paymentName);
+      params.set('paymentName', payment.name);
       returnUrl.search = params.toString();
 
       Setting.goToLink(returnUrl.toString());
