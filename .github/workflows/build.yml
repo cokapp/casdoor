@@ -66,7 +66,7 @@ jobs:
         uses: aliyun/acr-login@v1
         if: github.event_name == 'push'
         with:
-          login-server: registry.cn-hangzhou.aliyuncs.com
+          login-server: https://registry.cn-hangzhou.aliyuncs.com
           username: ${{ secrets.ALIYUN_ACR_USERNAME }}
           password: ${{ secrets.ALIYUN_ACR_PASSWORD }}
 
