@@ -70,28 +70,37 @@ jobs:
         id: get-current-tag
         uses: actions-ecosystem/action-get-latest-tag@v1.6.0
 
+
+
+      - name: Set up Buildx (and create builder instance)
+        id: buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          driver-opts: network=host
+          platforms: linux/amd64
+          driver: docker-container
+
       - name: Push to Alibaba Cloud Container Registry - Standard Version
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         if: github.event_name == 'push'
         with:
           context: .
           target: STANDARD
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: |
             registry.cn-hangzhou.aliyuncs.com/cokapp/casdoor:${{ steps.get-current-tag.outputs.tag }}
             registry.cn-hangzhou.aliyuncs.com/cokapp/casdoor:latest
 
       - name: Push All In One Version to Alibaba Cloud Container Registry
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         if: github.event_name == 'push'
         with:
           context: .
           target: ALLINONE
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: |
             registry.cn-hangzhou.aliyuncs.com/cokapp/casdoor-all-in-one:${{ steps.get-current-tag.outputs.tag }}
             registry.cn-hangzhou.aliyuncs.com/cokapp/casdoor-all-in-one:latest
-
 
