@@ -16,15 +16,13 @@ package object
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/casdoor/casdoor/idp"
-
 	"github.com/casdoor/casdoor/pp"
-
 	"github.com/casdoor/casdoor/util"
-	"github.com/xorm-io/core"
 
-	"net/url"
+	"github.com/xorm-io/core"
 )
 
 type Product struct {

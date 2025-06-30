@@ -46,12 +46,18 @@ func deployStaticFiles(provider *object.Provider) {
 		panic(fmt.Sprintf("the provider type: %s is not supported", provider.Type))
 	}
 
-	uploadFolder(storageProvider, "js")
-	uploadFolder(storageProvider, "css")
+	pathPrefix := provider.PathPrefix
+	if pathPrefix != "" {
+		pathPrefix += "/"
+	}
+
+	uploadFolder(storageProvider, pathPrefix, "js")
+	uploadFolder(storageProvider, pathPrefix, "css")
+
 	updateHtml(provider.Domain)
 }
 
-func uploadFolder(storageProvider oss.StorageInterface, folder string) {
+func uploadFolder(storageProvider oss.StorageInterface, pathPrefix string, folder string) {
 	path := fmt.Sprintf("../web/build/static/%s/", folder)
 	filenames := util.ListFiles(path)
 
@@ -65,7 +71,7 @@ func uploadFolder(storageProvider oss.StorageInterface, folder string) {
 			panic(err)
 		}
 
-		objectKey := fmt.Sprintf("static/%s/%s", folder, filename)
+		objectKey := fmt.Sprintf("%s/%s", pathPrefix+folder, filename)
 		_, err = storageProvider.Put(objectKey, file)
 		if err != nil {
 			panic(err)
