@@ -103,6 +103,10 @@ class PaymentEditPage extends React.Component {
     Setting.openLinkSafe(this.state.payment.invoiceUrl);
   }
 
+  updateRemark() {
+    this.submitPaymentEdit(false, false);
+  }
+
   renderModal() {
     const ths = this;
     const handleIssueInvoice = () => {
@@ -266,6 +270,14 @@ class PaymentEditPage extends React.Component {
             <Input disabled={false} value={this.state.payment.remark} onChange={e => {
               this.updatePaymentField("remark", e.target.value);
             }} />
+          </Col>
+        </Row>
+        <Row id={"remark-area"} style={{marginTop: "20px"}} >
+          <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
+            {Setting.getLabel(i18next.t("payment:Remark actions"), i18next.t("payment:Remark actions - Tooltip"))} :
+          </Col>
+          <Col span={22} >
+            <Button type={"primary"} onClick={() => this.updateRemark()}>{i18next.t("payment:Update Remark")}</Button>
           </Col>
         </Row>
         <Row style={{marginTop: "20px"}} >
@@ -448,11 +460,13 @@ class PaymentEditPage extends React.Component {
     return "";
   }
 
-  submitPaymentEdit(exitAfterSave) {
-    const errorText = this.checkError();
-    if (errorText !== "") {
-      Setting.showMessage("error", errorText);
-      return;
+  submitPaymentEdit(exitAfterSave, checkError = true) {
+    if (checkError) {
+      const errorText = this.checkError();
+      if (errorText !== "") {
+        Setting.showMessage("error", errorText);
+        return;
+      }
     }
 
     const payment = Setting.deepCopy(this.state.payment);
