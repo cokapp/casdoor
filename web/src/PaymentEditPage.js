@@ -263,8 +263,8 @@ class PaymentEditPage extends React.Component {
             {Setting.getLabel(i18next.t("payment:Remark"), i18next.t("payment:Remark - Tooltip"))} :
           </Col>
           <Col span={22} >
-            <Input disabled={true} value={this.state.payment.remark} onChange={e => {
-              // this.updatePaymentField("remark", e.target.value);
+            <Input disabled={false} value={this.state.payment.remark} onChange={e => {
+              this.updatePaymentField("remark", e.target.value);
             }} />
           </Col>
         </Row>
