@@ -247,8 +247,8 @@ class PaymentEditPage extends React.Component {
             {Setting.getLabel(i18next.t("general:State"), i18next.t("general:State - Tooltip"))} :
           </Col>
           <Col span={22} >
-            <Input disabled={true} value={this.state.payment.state} onChange={e => {
-              // this.updatePaymentField('state', e.target.value);
+            <Input value={this.state.payment.state} onChange={e => {
+              this.updatePaymentField("state", e.target.value);
             }} />
           </Col>
         </Row>
@@ -257,8 +257,8 @@ class PaymentEditPage extends React.Component {
             {Setting.getLabel(i18next.t("payment:Message"), i18next.t("payment:Message - Tooltip"))} :
           </Col>
           <Col span={22} >
-            <Input disabled={true} value={this.state.payment.message} onChange={e => {
-              // this.updatePaymentField('message', e.target.value);
+            <Input value={this.state.payment.message} onChange={e => {
+              this.updatePaymentField("message", e.target.value);
             }} />
           </Col>
         </Row>
@@ -480,8 +480,6 @@ class PaymentEditPage extends React.Component {
 
           if (exitAfterSave) {
             this.props.history.push("/payments");
-          } else {
-            this.props.history.push(`/payments/${this.state.payment.name}`);
           }
         } else {
           Setting.showMessage("error", `${i18next.t("general:Failed to save")}: ${res.msg}`);
