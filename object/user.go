@@ -190,7 +190,7 @@ type User struct {
 
 	WebauthnCredentials []webauthn.Credential `xorm:"webauthnCredentials blob" json:"webauthnCredentials"`
 	PreferredMfaType    string                `xorm:"varchar(100)" json:"preferredMfaType"`
-	RecoveryCodes       []string              `xorm:"varchar(1000)" json:"recoveryCodes"`
+	RecoveryCodes       []string              `xorm:"mediumtext" json:"recoveryCodes"`
 	TotpSecret          string                `xorm:"varchar(100)" json:"totpSecret"`
 	MfaPhoneEnabled     bool                  `json:"mfaPhoneEnabled"`
 	MfaEmailEnabled     bool                  `json:"mfaEmailEnabled"`
@@ -204,16 +204,18 @@ type User struct {
 
 	Roles       []*Role       `json:"roles"`
 	Permissions []*Permission `json:"permissions"`
-	Groups      []string      `xorm:"groups varchar(1000)" json:"groups"`
+	Groups      []string      `xorm:"mediumtext" json:"groups"`
 
 	LastChangePasswordTime string `xorm:"varchar(100)" json:"lastChangePasswordTime"`
 	LastSigninWrongTime    string `xorm:"varchar(100)" json:"lastSigninWrongTime"`
 	SigninWrongTimes       int    `json:"signinWrongTimes"`
 
-	ManagedAccounts    []ManagedAccount `xorm:"managedAccounts blob" json:"managedAccounts"`
-	MfaAccounts        []MfaAccount     `xorm:"mfaAccounts blob" json:"mfaAccounts"`
-	NeedUpdatePassword bool             `json:"needUpdatePassword"`
-	IpWhitelist        string           `xorm:"varchar(200)" json:"ipWhitelist"`
+	ManagedAccounts     []ManagedAccount `xorm:"managedAccounts blob" json:"managedAccounts"`
+	MfaAccounts         []MfaAccount     `xorm:"mfaAccounts blob" json:"mfaAccounts"`
+	MfaItems            []*MfaItem       `xorm:"varchar(300)" json:"mfaItems"`
+	MfaRememberDeadline string           `xorm:"varchar(100)" json:"mfaRememberDeadline"`
+	NeedUpdatePassword  bool             `json:"needUpdatePassword"`
+	IpWhitelist         string           `xorm:"varchar(200)" json:"ipWhitelist"`
 }
 
 type Userinfo struct {
@@ -508,6 +510,8 @@ func GetUserByPhone(owner string, phone string) (*User, error) {
 		return nil, nil
 	}
 
+	phone = util.GetSeperatedPhone(phone)
+
 	user := User{Owner: owner, Phone: phone}
 	existed, err := ormer.Engine.Get(&user)
 	if err != nil {
@@ -525,6 +529,8 @@ func GetUserByPhoneOnly(phone string) (*User, error) {
 	if phone == "" {
 		return nil, nil
 	}
+
+	phone = util.GetSeperatedPhone(phone)
 
 	user := User{Phone: phone}
 	existed, err := ormer.Engine.Get(&user)
@@ -661,6 +667,62 @@ func GetMaskedUser(user *User, isAdminOrSelf bool, errs ...error) (*User, error)
 	return user, nil
 }
 
+func GetFilteredUser(user *User, isAdmin bool, isAdminOrSelf bool, accountItems []*AccountItem) (*User, error) {
+	if accountItems == nil || len(accountItems) == 0 {
+		return user, nil
+	}
+
+	userFieldMap := map[string]int{}
+
+	reflectedUserField := reflect.TypeOf(User{})
+	for i := 0; i < reflectedUserField.NumField(); i++ {
+		userFieldMap[strings.ToLower(reflectedUserField.Field(i).Name)] = i
+	}
+
+	reflectedUser := reflect.ValueOf(user).Elem()
+
+	for _, accountItem := range accountItems {
+		if accountItem.ViewRule == "Public" {
+			continue
+		} else if accountItem.ViewRule == "Self" && isAdminOrSelf {
+			continue
+		} else if accountItem.ViewRule == "Admin" && isAdmin {
+			continue
+		}
+
+		lowerCaseAccountItemName := strings.ToLower(accountItem.Name)
+		lowerCaseAccountItemName = strings.ReplaceAll(lowerCaseAccountItemName, " ", "")
+
+		switch accountItem.Name {
+		case "Multi-factor authentication":
+			lowerCaseAccountItemName = strings.ToLower("PreferredMfaType")
+		case "User type":
+			lowerCaseAccountItemName = "type"
+		case "Country/Region":
+			lowerCaseAccountItemName = "region"
+		case "ID card info":
+			{
+				infoKeys := []string{"idCardWithPerson", "idCardFront", "idCardWithPerson"}
+				for _, infoKey := range infoKeys {
+					if _, ok := user.Properties[infoKey]; ok {
+						user.Properties[infoKey] = ""
+					}
+				}
+				continue
+			}
+		}
+
+		fieldIdx, ok := userFieldMap[lowerCaseAccountItemName]
+		if !ok {
+			continue
+		}
+
+		reflectedUser.Field(fieldIdx).SetZero()
+	}
+
+	return user, nil
+}
+
 func GetMaskedUsers(users []*User, errs ...error) ([]*User, error) {
 	if len(errs) > 0 && errs[0] != nil {
 		return nil, errs[0]
@@ -735,11 +797,11 @@ func UpdateUser(id string, user *User, columns []string, isAdmin bool) (bool, er
 			"eveonline", "fitbit", "gitea", "heroku", "influxcloud", "instagram", "intercom", "kakao", "lastfm", "mailru", "meetup",
 			"microsoftonline", "naver", "nextcloud", "onedrive", "oura", "patreon", "paypal", "salesforce", "shopify", "soundcloud",
 			"spotify", "strava", "stripe", "type", "tiktok", "tumblr", "twitch", "twitter", "typetalk", "uber", "vk", "wepay", "xero", "yahoo",
-			"yammer", "yandex", "zoom", "custom", "need_update_password", "ip_whitelist",
+			"yammer", "yandex", "zoom", "custom", "need_update_password", "ip_whitelist", "mfa_items", "mfa_remember_deadline",
 		}
 	}
 	if isAdmin {
-		columns = append(columns, "name", "id", "email", "phone", "country_code", "type", "balance")
+		columns = append(columns, "name", "id", "email", "phone", "country_code", "type", "balance", "mfa_items")
 	}
 
 	columns = append(columns, "updated_time")
@@ -749,7 +811,7 @@ func UpdateUser(id string, user *User, columns []string, isAdmin bool) (bool, er
 		columns = append(columns, "deleted_time")
 	}
 
-	if util.ContainsString(columns, "groups") {
+	if util.InSlice(columns, "groups") {
 		_, err := userEnforcer.UpdateGroupsForUser(user.GetId(), user.Groups)
 		if err != nil {
 			return false, err
@@ -1271,6 +1333,56 @@ func (user *User) CheckUserFace(faceIdImage []string, provider *Provider) (bool,
 		return false, errList[0]
 	}
 	return false, nil
+}
+
+func (user *User) GetUserFullGroupPath() ([]string, error) {
+	if len(user.Groups) == 0 {
+		return []string{}, nil
+	}
+
+	var orgGroups []*Group
+	orgGroups, err := GetGroups(user.Owner)
+	if err != nil {
+		return nil, err
+	}
+
+	groupMap := make(map[string]Group)
+	for _, group := range orgGroups {
+		groupMap[group.Name] = *group
+	}
+
+	var groupFullPath []string
+
+	for _, groupId := range user.Groups {
+		_, groupName := util.GetOwnerAndNameFromIdNoCheck(groupId)
+		group, ok := groupMap[groupName]
+		if !ok {
+			continue
+		}
+
+		groupPath := groupName
+
+		curGroup, ok := groupMap[group.ParentId]
+		if !ok {
+			return []string{}, fmt.Errorf("group:Group %s not exist", group.ParentId)
+		}
+		for {
+			groupPath = util.GetId(curGroup.Name, groupPath)
+			if curGroup.IsTopGroup {
+				break
+			}
+
+			curGroup, ok = groupMap[curGroup.ParentId]
+			if !ok {
+				return []string{}, fmt.Errorf("group:Group %s not exist", curGroup.ParentId)
+			}
+		}
+
+		groupPath = util.GetId(curGroup.Owner, groupPath)
+		groupFullPath = append(groupFullPath, groupPath)
+	}
+
+	return groupFullPath, nil
 }
 
 func GenerateIdForNewUser(application *Application) (string, error) {

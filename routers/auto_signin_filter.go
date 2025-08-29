@@ -66,6 +66,10 @@ func AutoSigninFilter(ctx *context.Context) {
 			responseError(ctx, err.Error())
 			return
 		}
+		if application == nil {
+			responseError(ctx, fmt.Sprintf("No application is found for userId: app/%s", token.Application))
+			return
+		}
 
 		setSessionUser(ctx, userId)
 		setSessionOidc(ctx, token.Scope, application.ClientId)
@@ -98,7 +102,12 @@ func AutoSigninFilter(ctx *context.Context) {
 	userId = ctx.Input.Query("username")
 	password := ctx.Input.Query("password")
 	if userId != "" && password != "" && ctx.Input.Query("grant_type") == "" {
-		owner, name := util.GetOwnerAndNameFromId(userId)
+		owner, name, err := util.GetOwnerAndNameFromIdWithError(userId)
+		if err != nil {
+			responseError(ctx, err.Error())
+			return
+		}
+
 		_, err = object.CheckUserPassword(owner, name, password, "en")
 		if err != nil {
 			responseError(ctx, err.Error())

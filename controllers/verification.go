@@ -160,7 +160,7 @@ func (c *ApiController) SendVerificationCode() {
 			if captchaProvider := captcha.GetCaptchaProvider(vform.CaptchaType); captchaProvider == nil {
 				c.ResponseError(c.T("general:don't support captchaProvider: ") + vform.CaptchaType)
 				return
-			} else if isHuman, err := captchaProvider.VerifyCaptcha(vform.CaptchaToken, vform.ClientSecret); err != nil {
+			} else if isHuman, err := captchaProvider.VerifyCaptcha(vform.CaptchaToken, provider.ClientId, vform.ClientSecret, provider.ClientId2); err != nil {
 				c.ResponseError(err.Error())
 				return
 			} else if !isHuman {
@@ -258,7 +258,7 @@ func (c *ApiController) SendVerificationCode() {
 			return
 		}
 
-		sendResp = object.SendVerificationCodeToEmail(organization, user, provider, clientIp, vform.Dest)
+		sendResp = object.SendVerificationCodeToEmail(organization, user, provider, clientIp, vform.Dest, vform.Method, c.Ctx.Request.Host, application.Name)
 	case object.VerifyTypePhone:
 		if vform.Method == LoginVerification || vform.Method == ForgetVerification {
 			if user != nil && util.GetMaskedPhone(user.Phone) == vform.Dest {
@@ -349,7 +349,7 @@ func (c *ApiController) VerifyCaptcha() {
 		return
 	}
 
-	isValid, err := provider.VerifyCaptcha(vform.CaptchaToken, vform.ClientSecret)
+	isValid, err := provider.VerifyCaptcha(vform.CaptchaToken, captchaProvider.ClientId, vform.ClientSecret, captchaProvider.ClientId2)
 	if err != nil {
 		c.ResponseError(err.Error())
 		return
@@ -435,9 +435,15 @@ func (c *ApiController) ResetEmailOrPhone() {
 
 	switch destType {
 	case object.VerifyTypeEmail:
+		id := user.GetId()
 		user.Email = dest
 		user.EmailVerified = true
-		_, err = object.UpdateUser(user.GetId(), user, []string{"email", "email_verified"}, false)
+		columns := []string{"email", "email_verified"}
+		if organization.UseEmailAsUsername {
+			user.Name = user.Email
+			columns = append(columns, "name")
+		}
+		_, err = object.UpdateUser(id, user, columns, false)
 	case object.VerifyTypePhone:
 		user.Phone = dest
 		_, err = object.SetUserField(user, "phone", user.Phone)
@@ -448,6 +454,9 @@ func (c *ApiController) ResetEmailOrPhone() {
 	if err != nil {
 		c.ResponseError(err.Error())
 		return
+	}
+	if organization.UseEmailAsUsername {
+		c.SetSessionUsername(user.GetId())
 	}
 
 	err = object.DisableVerificationCode(checkDest)

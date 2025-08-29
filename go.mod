@@ -7,6 +7,7 @@ require (
 	github.com/alexedwards/argon2id v0.0.0-20211130144151-3585854a6387
 	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.4
 	github.com/alibabacloud-go/facebody-20191230/v5 v5.1.2
+	github.com/alibabacloud-go/openapi-util v0.1.0
 	github.com/alibabacloud-go/tea v1.3.2
 	github.com/alibabacloud-go/tea-utils/v2 v2.0.7
 	github.com/aws/aws-sdk-go v1.45.5
@@ -51,7 +52,6 @@ require (
 	github.com/sendgrid/sendgrid-go v3.14.0+incompatible
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/siddontang/go-log v0.0.0-20190221022429-1e957dd83bed
-	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/stretchr/testify v1.10.0
 	github.com/stripe/stripe-go/v74 v74.29.0
 	github.com/tealeg/xlsx v1.0.5
@@ -90,7 +90,6 @@ require (
 	github.com/alibabacloud-go/darabonba-number v1.0.4 // indirect
 	github.com/alibabacloud-go/debug v1.0.1 // indirect
 	github.com/alibabacloud-go/endpoint-util v1.1.0 // indirect
-	github.com/alibabacloud-go/openapi-util v0.1.0 // indirect
 	github.com/alibabacloud-go/openplatform-20191219/v2 v2.0.1 // indirect
 	github.com/alibabacloud-go/tea-fileform v1.1.1 // indirect
 	github.com/alibabacloud-go/tea-oss-sdk v1.1.3 // indirect

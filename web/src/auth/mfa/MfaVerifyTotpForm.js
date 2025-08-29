@@ -1,5 +1,5 @@
-import {CopyOutlined, UserOutlined} from "@ant-design/icons";
-import {Button, Col, Form, Input, QRCode, Space} from "antd";
+import {CopyOutlined} from "@ant-design/icons";
+import {Button, Checkbox, Col, Form, Input, QRCode, Space} from "antd";
 import copy from "copy-to-clipboard";
 import i18next from "i18next";
 import React from "react";
@@ -41,18 +41,29 @@ export const MfaVerifyTotpForm = ({mfaProps, onFinish}) => {
       form={form}
       style={{width: "300px"}}
       onFinish={onFinish}
+      initialValues={{
+        enableMfaRemember: false,
+      }}
     >
       {renderSecret()}
       <Form.Item
         name="passcode"
         rules={[{required: true, message: "Please input your passcode"}]}
       >
-        <Input
+        <Input.OTP
           style={{marginTop: 24}}
-          prefix={<UserOutlined />}
-          placeholder={i18next.t("mfa:Passcode")}
-          autoComplete="off"
+          onChange={() => {
+            form.submit();
+          }}
         />
+      </Form.Item>
+      <Form.Item
+        name="enableMfaRemember"
+        valuePropName="checked"
+      >
+        <Checkbox>
+          {i18next.t("mfa:Remember this account for {hour} hours").replace("{hour}", mfaProps?.mfaRememberInHours)}
+        </Checkbox>
       </Form.Item>
       <Form.Item>
         <Button

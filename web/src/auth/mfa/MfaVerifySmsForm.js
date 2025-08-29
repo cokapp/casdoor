@@ -1,5 +1,5 @@
 import {UserOutlined} from "@ant-design/icons";
-import {Button, Form, Input, Space} from "antd";
+import {Button, Checkbox, Form, Input, Space} from "antd";
 import i18next from "i18next";
 import React, {useEffect} from "react";
 import {CountryCodeSelect} from "../../common/select/CountryCodeSelect";
@@ -54,6 +54,7 @@ export const MfaVerifySmsForm = ({mfaProps, application, onFinish, method, user}
       onFinish={onFinish}
       initialValues={{
         countryCode: mfaProps.countryCode,
+        enableMfaRemember: false,
       }}
     >
       {isShowText() ?
@@ -108,6 +109,14 @@ export const MfaVerifySmsForm = ({mfaProps, application, onFinish, method, user}
           onButtonClickArgs={[mfaProps.secret || dest, isEmail() ? "email" : "phone", Setting.getApplicationName(application)]}
           application={application}
         />
+      </Form.Item>
+      <Form.Item
+        name="enableMfaRemember"
+        valuePropName="checked"
+      >
+        <Checkbox>
+          {i18next.t("mfa:Remember this account for {hour} hours").replace("{hour}", mfaProps?.mfaRememberInHours)}
+        </Checkbox>
       </Form.Item>
       <Form.Item>
         <Button

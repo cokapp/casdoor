@@ -67,6 +67,7 @@ type Application struct {
 
 	DisplayName           string          `xorm:"varchar(100)" json:"displayName"`
 	Logo                  string          `xorm:"varchar(200)" json:"logo"`
+	Order                 int             `json:"order"`
 	HomepageUrl           string          `xorm:"varchar(100)" json:"homepageUrl"`
 	Description           string          `xorm:"varchar(100)" json:"description"`
 	Organization          string          `xorm:"varchar(100)" json:"organization"`
@@ -75,6 +76,7 @@ type Application struct {
 	HeaderHtml            string          `xorm:"mediumtext" json:"headerHtml"`
 	EnablePassword        bool            `json:"enablePassword"`
 	EnableSignUp          bool            `json:"enableSignUp"`
+	DisableSignin         bool            `json:"disableSignin"`
 	EnableSigninSession   bool            `json:"enableSigninSession"`
 	EnableAutoSignin      bool            `json:"enableAutoSignin"`
 	EnableCodeSignin      bool            `json:"enableCodeSignin"`

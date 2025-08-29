@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import React from "react";
-import {Button, Form, Input, Radio, Result, Row, Select, message} from "antd";
+import {Button, Form, Input, Popover, Radio, Result, Row, Select, message} from "antd";
 import * as Setting from "../Setting";
 import * as AuthBackend from "./AuthBackend";
 import * as ProviderButton from "./ProviderButton";
@@ -364,6 +364,40 @@ class SignupPage extends React.Component {
           <Input className="signup-name-input" placeholder={signupItem.placeholder} />
         </Form.Item>
       );
+    } else if (signupItem.name === "First name" && this.state?.displayNameRule !== "First, last") {
+      return (
+        <Form.Item
+          name="firstName"
+          className="signup-first-name"
+          label={signupItem.label ? signupItem.label : i18next.t("general:First name")}
+          rules={[
+            {
+              required: required,
+              message: i18next.t("signup:Please input your first name!"),
+              whitespace: true,
+            },
+          ]}
+        >
+          <Input className="signup-first-name-input" placeholder={signupItem.placeholder} />
+        </Form.Item>
+      );
+    } else if (signupItem.name === "Last name" && this.state?.displayNameRule !== "First, last") {
+      return (
+        <Form.Item
+          name="lastName"
+          className="signup-last-name"
+          label={signupItem.label ? signupItem.label : i18next.t("general:Last name")}
+          rules={[
+            {
+              required: required,
+              message: i18next.t("signup:Please input your last name!"),
+              whitespace: true,
+            },
+          ]}
+        >
+          <Input className="signup-last-name-input" placeholder={signupItem.placeholder} />
+        </Form.Item>
+      );
     } else if (signupItem.name === "Affiliation") {
       return (
         <Form.Item
@@ -607,28 +641,45 @@ class SignupPage extends React.Component {
       }
     } else if (signupItem.name === "Password") {
       return (
-        <Form.Item
-          name="password"
-          className="signup-password"
-          label={signupItem.label ? signupItem.label : i18next.t("general:Password")}
-          rules={[
-            {
-              required: required,
-              validateTrigger: "onChange",
-              validator: (rule, value) => {
-                const errorMsg = PasswordChecker.checkPasswordComplexity(value, application.organizationObj.passwordOptions);
-                if (errorMsg === "") {
-                  return Promise.resolve();
-                } else {
-                  return Promise.reject(errorMsg);
-                }
+        <Popover placement={window.innerWidth >= 960 ? "right" : "top"} content={this.state.passwordPopover} open={this.state.passwordPopoverOpen}>
+          <Form.Item
+            name="password"
+            className="signup-password"
+            label={signupItem.label ? signupItem.label : i18next.t("general:Password")}
+            rules={[
+              {
+                required: required,
+                validateTrigger: "onChange",
+                validator: (rule, value) => {
+                  const errorMsg = PasswordChecker.checkPasswordComplexity(value, application.organizationObj.passwordOptions);
+                  if (errorMsg === "") {
+                    return Promise.resolve();
+                  } else {
+                    return Promise.reject(errorMsg);
+                  }
+                },
               },
-            },
-          ]}
-          hasFeedback
-        >
-          <Input.Password className="signup-password-input" placeholder={signupItem.placeholder} />
-        </Form.Item>
+            ]}
+            hasFeedback
+          >
+            <Input.Password className="signup-password-input" placeholder={signupItem.placeholder} onChange={(e) => {
+              this.setState({
+                passwordPopover: PasswordChecker.renderPasswordPopover(application.organizationObj.passwordOptions, e.target.value),
+              });
+            }}
+            onFocus={() => {
+              this.setState({
+                passwordPopoverOpen: application.organizationObj.passwordOptions?.length > 0,
+                passwordPopover: PasswordChecker.renderPasswordPopover(application.organizationObj.passwordOptions, this.form.current?.getFieldValue("password") ?? ""),
+              });
+            }}
+            onBlur={() => {
+              this.setState({
+                passwordPopoverOpen: false,
+              });
+            }} />
+          </Form.Item>
+        </Popover>
       );
     } else if (signupItem.name === "Confirm password") {
       return (
@@ -759,6 +810,12 @@ class SignupPage extends React.Component {
         this.form.current?.setFieldValue("invitationCode", this.state.invitationCode);
       }
     }
+
+    const displayNameItem = application.signupItems?.find(item => item.name === "Display name");
+    if (displayNameItem && !this.state.displayNameRule) {
+      this.setState({displayNameRule: displayNameItem.rule});
+    }
+
     return (
       <Form
         {...formItemLayout}

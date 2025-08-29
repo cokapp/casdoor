@@ -80,12 +80,14 @@ type Organization struct {
 	IsProfilePublic        bool       `json:"isProfilePublic"`
 	UseEmailAsUsername     bool       `json:"useEmailAsUsername"`
 	EnableTour             bool       `json:"enableTour"`
+	DisableSignin          bool       `json:"disableSignin"`
 	IpRestriction          string     `json:"ipRestriction"`
-	NavItems               []string   `xorm:"varchar(1000)" json:"navItems"`
-	WidgetItems            []string   `xorm:"varchar(1000)" json:"widgetItems"`
+	NavItems               []string   `xorm:"mediumtext" json:"navItems"`
+	WidgetItems            []string   `xorm:"mediumtext" json:"widgetItems"`
 
-	MfaItems     []*MfaItem     `xorm:"varchar(300)" json:"mfaItems"`
-	AccountItems []*AccountItem `xorm:"varchar(5000)" json:"accountItems"`
+	MfaItems           []*MfaItem     `xorm:"varchar(300)" json:"mfaItems"`
+	MfaRememberInHours int            `json:"mfaRememberInHours"`
+	AccountItems       []*AccountItem `xorm:"mediumtext" json:"accountItems"`
 }
 
 func GetOrganizationCount(owner, name, field, value string) (int64, error) {
@@ -222,7 +224,7 @@ func UpdateOrganization(id string, organization *Organization, isGlobalAdmin boo
 	if organization.MasterPassword != "" && organization.MasterPassword != "***" {
 		credManager := cred.GetCredManager(organization.PasswordType)
 		if credManager != nil {
-			hashedPassword := credManager.GetHashedPassword(organization.MasterPassword, "", organization.PasswordSalt)
+			hashedPassword := credManager.GetHashedPassword(organization.MasterPassword, organization.PasswordSalt)
 			organization.MasterPassword = hashedPassword
 		}
 	}
@@ -536,7 +538,13 @@ func IsNeedPromptMfa(org *Organization, user *User) bool {
 	if org == nil || user == nil {
 		return false
 	}
-	for _, item := range org.MfaItems {
+
+	mfaItems := org.MfaItems
+
+	if len(user.MfaItems) > 0 {
+		mfaItems = user.MfaItems
+	}
+	for _, item := range mfaItems {
 		if item.Rule == "Required" {
 			if item.Name == EmailType && !user.MfaEmailEnabled {
 				return true
