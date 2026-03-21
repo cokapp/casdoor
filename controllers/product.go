@@ -16,6 +16,8 @@ package controllers
 
 import (
 	"encoding/json"
+	"fmt"
+	"strconv"
 
 	"github.com/beego/beego/v2/core/utils/pagination"
 	"github.com/casdoor/casdoor/object"
@@ -148,4 +150,75 @@ func (c *ApiController) DeleteProduct() {
 
 	c.Data["json"] = wrapActionResponse(object.DeleteProduct(&product))
 	c.ServeJSON()
+}
+
+// BuyProduct
+// @Title BuyProduct
+// @Tag Product API
+// @Description buy product
+// @Param   id     query    string  true        "The id ( owner/name ) of the product"
+// @Param   providerName    query    string  true  "The name of the provider"
+// @Param   body    body    object.BuyProductBody  false  "The remark of the payment"
+// @Success 200 {object} controllers.Response The Response object
+// @router /buy-product [post]
+func (c *ApiController) BuyProduct() {
+	id := c.Ctx.Input.Query("id")
+	host := c.Ctx.Request.Host
+	providerName := c.Ctx.Input.Query("providerName")
+	paymentEnv := c.Ctx.Input.Query("paymentEnv")
+	customPriceStr := c.Ctx.Input.Query("customPrice")
+	if customPriceStr == "" {
+		customPriceStr = "0"
+	}
+
+	customPrice, err := strconv.ParseFloat(customPriceStr, 64)
+	if err != nil {
+		c.ResponseError(err.Error())
+		return
+	}
+
+	var buyProductBody object.BuyProductBody
+	if len(c.Ctx.Input.RequestBody) > 0 {
+		bodyError := json.Unmarshal(c.Ctx.Input.RequestBody, &buyProductBody)
+		if bodyError != nil {
+			c.ResponseError(bodyError.Error())
+			return
+		}
+	}
+
+	// buy `pricingName/planName` for `paidUserName`
+	pricingName := c.Ctx.Input.Query("pricingName")
+	planName := c.Ctx.Input.Query("planName")
+	paidUserName := c.Ctx.Input.Query("userName")
+	owner, _ := util.GetOwnerAndNameFromIdNoCheck(id)
+	userId := util.GetId(owner, paidUserName)
+	if paidUserName != "" && paidUserName != c.GetSessionUsername() && !c.IsAdmin() {
+		c.ResponseError(c.T("general:Only admin user can specify user"))
+		return
+	}
+	if paidUserName == "" {
+		userId = c.GetSessionUsername()
+	}
+	if userId == "" {
+		c.ResponseError(c.T("general:Please login first"))
+		return
+	}
+
+	user, err := object.GetUser(userId)
+	if err != nil {
+		c.ResponseError(err.Error())
+		return
+	}
+	if user == nil {
+		c.ResponseError(fmt.Sprintf(c.T("general:The user: %s doesn't exist"), userId))
+		return
+	}
+
+	payment, attachInfo, err := object.BuyProduct(id, user, providerName, pricingName, planName, host, paymentEnv, customPrice, buyProductBody.Remark, c.GetAcceptLanguage())
+	if err != nil {
+		c.ResponseError(err.Error())
+		return
+	}
+
+	c.ResponseOk(payment, attachInfo)
 }

@@ -16,8 +16,12 @@ package object
 
 import (
 	"fmt"
+	"net/url"
 
+	"github.com/casdoor/casdoor/idp"
+	"github.com/casdoor/casdoor/pp"
 	"github.com/casdoor/casdoor/util"
+
 	"github.com/xorm-io/core"
 )
 
@@ -39,6 +43,8 @@ type Product struct {
 	RechargeOptions       []float64 `xorm:"varchar(500)" json:"rechargeOptions"`
 	DisableCustomRecharge bool      `json:"disableCustomRecharge"`
 	Providers             []string  `xorm:"varchar(255)" json:"providers"`
+	ReturnUrl             string    `xorm:"varchar(1000)" json:"returnUrl"`
+	ReturnType            string    `xorm:"varchar(100)" json:"returnType"`
 	SuccessUrl            string    `xorm:"varchar(1000)" json:"successUrl"`
 
 	State string `xorm:"varchar(100)" json:"state"`
@@ -257,6 +263,248 @@ func (product *Product) getProvider(providerName string) (*Provider, error) {
 	return provider, nil
 }
 
+func BuyProduct(id string, user *User, providerName, pricingName, planName, host, paymentEnv string, customPrice float64, remark string, lang string) (payment *Payment, attachInfo map[string]interface{}, err error) {
+	product, err := GetProduct(id)
+	if err != nil {
+		return nil, nil, err
+	}
+	if product == nil {
+		return nil, nil, fmt.Errorf("the product: %s does not exist", id)
+	}
+
+	if product.IsRecharge {
+		if customPrice <= 0 {
+			return nil, nil, fmt.Errorf("the custom price should bigger than zero")
+		} else {
+			product.Price = customPrice
+		}
+	}
+
+	provider, err := product.getProvider(providerName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pProvider, err := GetPaymentProvider(provider)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	owner := product.Owner
+	payerName := fmt.Sprintf("%s | %s", user.Name, user.DisplayName)
+	paymentName := fmt.Sprintf("payment_%v", util.GenerateTimeId())
+
+	originFrontend, originBackend := getOriginFromHost(host)
+
+	returnUrl := fmt.Sprintf("%s/payments/%s/%s/result?source=pay", originFrontend, owner, paymentName)
+	if product.ReturnType == "directRedirect" {
+		// give some usefull callback parameter to SuccessUrl
+		returnUrl = product.ReturnUrl
+		parsedURL, err := url.Parse(returnUrl)
+		if err == nil {
+			params := parsedURL.Query()
+			params.Set("owner", owner)
+			params.Set("paymentName", paymentName)
+			parsedURL.RawQuery = params.Encode()
+			returnUrl = parsedURL.String()
+		}
+	}
+
+	notifyUrl := fmt.Sprintf("%s/api/notify-payment/%s/%s", originBackend, owner, paymentName)
+	if user.Type == "paid-user" {
+		// Create a subscription for `paid-user`
+		if pricingName != "" && planName != "" {
+			plan, err := GetPlan(util.GetId(owner, planName))
+			if err != nil {
+				return nil, nil, err
+			}
+			if plan == nil {
+				return nil, nil, fmt.Errorf("the plan: %s does not exist", planName)
+			}
+
+			sub, err := NewSubscription(owner, user.Name, plan.Name, paymentName, plan.Period)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			_, err = AddSubscription(sub)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			returnUrl = fmt.Sprintf("%s/buy-plan/%s/%s/result?subscription=%s", originFrontend, owner, pricingName, sub.Name)
+		}
+	}
+
+	if product.SuccessUrl != "" {
+		returnUrl = fmt.Sprintf("%s?transactionOwner=%s&transactionName=%s", product.SuccessUrl, owner, paymentName)
+	}
+	// Create an order
+	payReq := &pp.PayReq{
+		ProviderName:       providerName,
+		ProductName:        product.Name,
+		PayerName:          payerName,
+		PayerId:            user.Id,
+		PayerEmail:         user.Email,
+		PaymentName:        paymentName,
+		ProductDisplayName: product.DisplayName,
+		ProductDescription: product.Description,
+		ProductImage:       product.Image,
+		Price:              product.Price,
+		Currency:           product.Currency,
+		ReturnUrl:          returnUrl,
+		NotifyUrl:          notifyUrl,
+		PaymentEnv:         paymentEnv,
+	}
+
+	// custom process for WeChat & WeChat Pay
+	if provider.Type == "WeChat Pay" {
+		payReq.PayerId, err = getUserExtraProperty(user, "WeChat", idp.BuildWechatOpenIdKey(provider.ClientId2))
+		if err != nil {
+			return nil, nil, err
+		}
+	} else if provider.Type == "Balance" {
+		payReq.PayerId = user.GetId()
+	}
+
+	payResp, err := pProvider.Pay(payReq)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Create a Payment linked with Product and Order
+	payment = &Payment{
+		Owner:       product.Owner,
+		Name:        paymentName,
+		CreatedTime: util.GetCurrentTime(),
+		DisplayName: paymentName,
+
+		Provider: provider.Name,
+		Type:     provider.Type,
+
+		Products:            []string{product.Name},
+		ProductName:         product.Name,
+		ProductDisplayName:  product.DisplayName,
+		ProductsDisplayName: product.DisplayName,
+		Detail:              product.Detail,
+		Tag:                 product.Tag,
+		Currency:            product.Currency,
+		Price:               product.Price,
+		ReturnUrl:           product.ReturnUrl,
+		ReturnType:          product.ReturnType,
+		IsRecharge:          product.IsRecharge,
+
+		User:       user.Name,
+		PayUrl:     payResp.PayUrl,
+		SuccessUrl: returnUrl,
+		State:      pp.PaymentStateCreated,
+		OutOrderId: payResp.OrderId,
+		Remark:     remark,
+	}
+
+	if provider.Type == "Dummy" {
+		payment.State = pp.PaymentStatePaid
+		err = UpdateUserBalance(user.Owner, user.Name, payment.Price, product.Currency, lang)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else if provider.Type == "Balance" {
+		if product.Price > user.Balance {
+			return nil, nil, fmt.Errorf("insufficient user balance")
+		}
+		payment.State = pp.PaymentStatePaid
+	}
+
+	affected, err := AddPayment(payment)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !affected {
+		return nil, nil, fmt.Errorf("failed to add payment: %s", util.StructToJson(payment))
+	}
+
+	if provider.Type == "Balance" {
+		transaction := &Transaction{
+			Owner:       payment.Owner,
+			CreatedTime: util.GetCurrentTime(),
+			Application: user.SignupApplication,
+			Amount:      -payment.Price,
+			Currency:    product.Currency,
+			Payment:     payment.Name,
+			Category:    TransactionCategoryPurchase,
+			Type:        provider.Category,
+			Subtype:     provider.Type,
+			Provider:    provider.Name,
+			Tag:         "User",
+			User:        payment.User,
+			State:       string(pp.PaymentStatePaid),
+		}
+
+		var txOk bool
+		txOk, err = AddInternalPaymentTransaction(transaction, lang)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !txOk {
+			return nil, nil, fmt.Errorf("failed to add transaction: %s", util.StructToJson(transaction))
+		}
+
+		if product.IsRecharge {
+			rechargeTransaction := &Transaction{
+				Owner:       payment.Owner,
+				CreatedTime: util.GetCurrentTime(),
+				Application: user.SignupApplication,
+				Amount:      payment.Price,
+				Currency:    product.Currency,
+				Payment:     payment.Name,
+				Category:    TransactionCategoryRecharge,
+				Type:        provider.Category,
+				Subtype:     provider.Type,
+				Provider:    provider.Name,
+				Tag:         "User",
+				User:        payment.User,
+				State:       string(pp.PaymentStatePaid),
+			}
+
+			txOk, err = AddInternalPaymentTransaction(rechargeTransaction, lang)
+			if err != nil {
+				return nil, nil, err
+			}
+			if !txOk {
+				return nil, nil, fmt.Errorf("failed to add recharge transaction: %s", util.StructToJson(rechargeTransaction))
+			}
+		}
+	} else if product.IsRecharge {
+		// Record-only until external notify completes; Dummy recharge is already credited via UpdateUserBalance above
+		transaction := &Transaction{
+			Owner:       payment.Owner,
+			CreatedTime: util.GetCurrentTime(),
+			Application: user.SignupApplication,
+			Amount:      payment.Price,
+			Currency:    product.Currency,
+			Payment:     payment.Name,
+			Category:    TransactionCategoryRecharge,
+			Type:        provider.Category,
+			Subtype:     provider.Type,
+			Provider:    provider.Name,
+			Tag:         "",
+			User:        payment.User,
+			State:       string(payment.State),
+		}
+
+		var txOk bool
+		txOk, _, err = AddTransaction(transaction, lang, false)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !txOk {
+			return nil, nil, fmt.Errorf("failed to add transaction: %s", util.StructToJson(transaction))
+		}
+	}
+
+	return payment, payResp.AttachInfo, nil
+}
+
 func ExtendProductWithProviders(product *Product) error {
 	if product == nil {
 		return nil
@@ -358,4 +606,8 @@ func validateProductCurrencies(products []Product, orderCurrency string) error {
 		}
 	}
 	return nil
+}
+
+type BuyProductBody struct {
+	Remark string `json:"remark"`
 }

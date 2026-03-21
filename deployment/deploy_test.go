@@ -31,5 +31,5 @@ func TestDeployStaticFiles(t *testing.T) {
 		panic(err)
 	}
 
-	deployStaticFiles(provider)
+	deployStaticFiles(provider, getEnvOrDefault("BUILD_VERSION", "v1"))
 }

@@ -1,0 +1,75 @@
+name: 手动部署
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: '部署环境'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - test
+      only_restart:
+        description: '仅重启服务'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  manual_deploy_docker:
+    name: 部署到指定环境
+    runs-on: ubuntu-latest
+    needs: []
+    steps:
+      - name: 设置环境变量（产线）
+        if: github.event.inputs.environment == "production"
+        run: |
+          echo "ENVIRONMENT=production" >> $GITHUB_ENV
+          echo "HOST=qc.cokapp.com" >> $GITHUB_ENV
+          echo "CONFIG_PATH=scripts/production" >> $GITHUB_ENV
+          echo "USER=cokapp" >> $GITHUB_ENV
+          echo "PORT=22" >> $GITHUB_ENV
+          
+      - name: 设置环境变量（测试）
+        if: github.event.inputs.environment == "test"
+        run: |
+          echo "ENVIRONMENT=test" >> $GITHUB_ENV
+          echo "HOST=h.cokapp.com" >> $GITHUB_ENV
+          echo "PORT=1522" >> $GITHUB_ENV
+          echo "CONFIG_PATH=scripts/test" >> $GITHUB_ENV
+          echo "USER=cokapp" >> $GITHUB_ENV
+
+      - name: 检出代码
+        uses: actions/checkout@v3
+        
+      - name: 显示部署信息
+        run: |
+          echo "部署环境: ${{ env.ENVIRONMENT }}"
+          echo "目标主机: ${{ env.HOST }}"
+          echo "配置文件路径: ${{ env.CONFIG_PATH }}"
+          echo "触发方式: ${{ github.event_name }}"
+          echo "仅重启服务: ${{ github.event.inputs.only_restart }}"
+          
+      - name: 复制配置文件到服务器
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ env.HOST }}
+          username: ${{ env.USER }}
+          key: ${{ secrets.SSH_PRIVATE_CI }}
+          port: ${{ env.PORT }}
+          source: "${{ env.CONFIG_PATH }}/*"
+          target: "/home/cokapp/autodeploy/casdoor/"
+          strip_components: 2
+          
+      - name: 部署到服务器
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ env.HOST }}
+          username: ${{ env.USER }}
+          key: ${{ secrets.SSH_PRIVATE_CI }}
+          port: ${{ env.PORT }}
+          script_path: scripts/deploy.sh
+          envs: |
+            ONLY_RESTART=${{ github.event.inputs.only_restart }} 
