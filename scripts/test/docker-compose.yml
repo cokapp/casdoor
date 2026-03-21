@@ -1,0 +1,14 @@
+version: '3.7'
+
+services:
+  casdoor:
+    container_name: casdoor
+    image: registry.cn-hangzhou.aliyuncs.com/cokapp/casdoor:latest
+    ports: 
+      - 3000:3000
+    env_file:
+      - ./conf/.env
+    volumes:
+      - ./logs:/app/logs:rw
+    environment:
+      LOG_DIR: /app/logs

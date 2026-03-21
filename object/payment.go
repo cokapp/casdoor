@@ -36,8 +36,12 @@ type Payment struct {
 	ProductName         string   `xorm:"varchar(1000)" json:"productName"`
 	ProductDisplayName  string   `xorm:"varchar(1000)" json:"productDisplayName"`
 	Detail              string   `xorm:"varchar(255)" json:"detail"`
+	Tag                 string   `xorm:"varchar(100)" json:"tag"`
 	Currency            string   `xorm:"varchar(100)" json:"currency"`
 	Price               float64  `json:"price"`
+	ReturnUrl           string   `xorm:"varchar(1000)" json:"returnUrl"`
+	ReturnType          string   `xorm:"varchar(200)" json:"returnType"`
+	IsRecharge          bool     `xorm:"bool" json:"isRecharge"`
 
 	// Payer Info
 	User         string `xorm:"varchar(100)" json:"user"`
@@ -59,6 +63,7 @@ type Payment struct {
 	SuccessUrl string          `xorm:"varchar(2000)" json:"successUrl"` // `successUrl` is redirected from `payUrl` after pay success
 	State      pp.PaymentState `xorm:"varchar(100)" json:"state"`
 	Message    string          `xorm:"varchar(2000)" json:"message"`
+	Remark     string          `xorm:"longtext" json:"remark"`
 }
 
 func GetPaymentCount(owner, field, value string) (int64, error) {

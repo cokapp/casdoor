@@ -17,6 +17,7 @@ package deployment
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -26,7 +27,7 @@ import (
 	"github.com/casdoor/oss"
 )
 
-func deployStaticFiles(provider *object.Provider) {
+func deployStaticFiles(provider *object.Provider, buildVersion string) {
 	certificate := ""
 	if provider.Category == "Storage" && provider.Type == "Casdoor" {
 		cert, err := object.GetCert(util.GetId(provider.Owner, provider.Cert))
@@ -46,12 +47,18 @@ func deployStaticFiles(provider *object.Provider) {
 		panic(fmt.Sprintf("the provider type: %s is not supported", provider.Type))
 	}
 
-	uploadFolder(storageProvider, "js")
-	uploadFolder(storageProvider, "css")
-	updateHtml(provider.Domain)
+	// 这里的逻辑是： provider.PathPrefix是固定的cdn目录，buildVersion是版本号
+	// 同时，使用 PUBLIC_URL=${{ vars.CDN_DOMAIN }}/${{ vars.PROVIDER_PATH_PREFIX }}/${{ steps.get-current-tag.outputs.tag }}/ yarn run build 构建的前端页面
+	// 要求静态文件保存在cdn的如下目录：/${{ vars.PROVIDER_PATH_PREFIX }}/${{ steps.get-current-tag.outputs.tag }}/static/
+	pathPrefix := path.Join(provider.PathPrefix, buildVersion, "static")
+
+	fmt.Printf("buildVersion: %s, pathPrefix: %s\n", buildVersion, pathPrefix)
+
+	uploadFolder(storageProvider, pathPrefix, "js")
+	uploadFolder(storageProvider, pathPrefix, "css")
 }
 
-func uploadFolder(storageProvider oss.StorageInterface, folder string) {
+func uploadFolder(storageProvider oss.StorageInterface, pathPrefix string, folder string) {
 	path := fmt.Sprintf("../web/build/static/%s/", folder)
 	filenames := util.ListFiles(path)
 
@@ -65,7 +72,7 @@ func uploadFolder(storageProvider oss.StorageInterface, folder string) {
 			panic(err)
 		}
 
-		objectKey := fmt.Sprintf("static/%s/%s", folder, filename)
+		objectKey := fmt.Sprintf("%s/%s/%s", pathPrefix, folder, filename)
 		_, err = storageProvider.Put(objectKey, file)
 		if err != nil {
 			panic(err)
@@ -73,13 +80,4 @@ func uploadFolder(storageProvider oss.StorageInterface, folder string) {
 
 		fmt.Printf("Uploaded [%s] to [%s]\n", path, objectKey)
 	}
-}
-
-func updateHtml(domainPath string) {
-	htmlPath := "../web/build/index.html"
-	html := util.ReadStringFromPath(htmlPath)
-	html = strings.Replace(html, "\"/static/", fmt.Sprintf("\"%s", domainPath), -1)
-	util.WriteStringToPath(html, htmlPath)
-
-	fmt.Printf("Updated HTML to [%s]\n", html)
 }

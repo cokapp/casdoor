@@ -36,6 +36,7 @@ class PaymentResultPage extends React.Component {
       subscription: props.subscription ?? null,
       timeout: null,
       user: null,
+      source: params.get("source"),
     };
   }
 
@@ -118,6 +119,8 @@ class PaymentResultPage extends React.Component {
         throw new Error(res.msg);
       }
       const payment = res.data;
+      this.processAutoReturn(payment);
+
       await this.setStateAsync({
         payment: payment,
       });
@@ -152,7 +155,36 @@ class PaymentResultPage extends React.Component {
     if (payment && payment.order) {
       this.props.history.push(`/orders/${payment.owner}/${payment.order}/pay`);
     } else {
-      Setting.showMessage("error", i18next.t("order:Order not found"));
+      // append some usefull callback parameter to SuccessUrl
+      const returnUrl = new URL(payment.returnUrl);
+      const params = new URLSearchParams(returnUrl.search);
+      params.set("owner", payment.owner);
+      params.set("paymentName", payment.name);
+      returnUrl.search = params.toString();
+
+      Setting.goToLink(returnUrl.toString());
+    }
+  }
+
+  processAutoReturn(payment) {
+    // only auto return from pay callback
+    if (this.state.source !== "pay") {
+      return;
+    }
+    const {state, returnType} = payment;
+    if (returnType === "autoClose") {
+      window.close();
+      return;
+    }
+    if (state === "Paid") {
+      if (returnType === "paidAutoRedirect") {
+        this.goToPaymentUrl(payment);
+        return;
+      }
+      if (returnType === "paidAutoClose") {
+        window.close();
+        return;
+      }
     }
   }
 
